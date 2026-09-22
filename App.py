@@ -12,7 +12,6 @@ st.set_page_config(page_title="Rugby Team Sheets", page_icon="🏉", layout="cen
 # ==========================================
 # 1. 2026/2027 REAL SQUAD DATA STRUCTURE
 # ==========================================
-# Real Senior Squad Rosters for the Gallagher Premiership & Championship
 CLUB_ROSTERS = {
     "Bath Rugby": [
         "Finn Russell", "Ben Spencer", "Ollie Lawrence", "Sam Underhill", "Henry Arundell", 
@@ -84,7 +83,7 @@ CLUB_ROSTERS = {
         "Bryan Byrne", "Phil Brantingham", "Mark Tampin", "Tim Cardall", "Freddie Lockwood",
         "Cameron Nordli-Kelemeti", "Louie Johnson", "Iwan Stephens"
     ],
-    # Championship club real matchday rosters
+    # Championship Club Core Rosters (Padded up dynamically to full matching lengths)
     "Ampthill": ["Morgan Strong", "Tobias Munday", "Josh Barton", "Killian Brennan", "Brandon Jackson", "Ben Harris"],
     "Bedford Blues": ["Alex Day", "Dean Adamson", "Will Maisey", "Joey Conway", "James Fish", "Michael Le Bourgeois"],
     "Blackheath": ["Tom Ffitch", "Leo Fielding", "Jack Daly", "Paul Schroter", "Andy Boye", "Ed Taylor"],
@@ -98,7 +97,7 @@ CLUB_ROSTERS = {
     "Nottingham": ["Josh Poullet", "Sam Hollingsworth", "Michael Green", "Harry Graham", "Jack Dickinson", "Scott Hall"],
     "Richmond": ["Jake Caddy", "Alex Post", "Mark Bright", "Luc Jones", "Ted Landray", "David Banfield"],
     "Rotherham Titans": ["Zak Poole", "Richard Hayes", "Lloyd Hayes", "Charlie Capps", "Jack Bergmanas", "Harry Newman"],
-    "Worcester Warriors": ["Richie留", "Chris Pennell", "Ted Hill", "Francois Venter", "Nick David", "Gareth Simpson"]
+    "Worcester Warriors": ["Chris Pennell", "Ted Hill", "Francois Venter", "Nick David", "Gareth Simpson"]
 }
 
 LEAGUE_TEAMS = {
@@ -119,7 +118,7 @@ def reset_application():
             del st.session_state[key]
 
 # ==========================================
-# 3. USER INTERFACE (TOUCH RESIZING)
+# 3. USER INTERFACE GENERATION
 # ==========================================
 st.title("🏉 Rugby Team Sheet Generator")
 st.write("Select a league, lookup a fixture, customize rosters, and download printable outputs.")
@@ -145,13 +144,13 @@ if home_team != "-- Choose Home Team --" and away_team != "-- Choose Away Team -
         if st.button("🔍 Search & Populate Match Roster", type="secondary", use_container_width=True):
             st.session_state.search_clicked = True
             
-            # Fetch base list or fallback to empty cells
+            # Fetch raw list array
             h_raw = CLUB_ROSTERS.get(home_team, [])
             a_raw = CLUB_ROSTERS.get(away_team, [])
             
-            # Pad lists cleanly to exactly 23 items
-            st.session_state.home_squad = [h_raw[i] if i < len(h_raw) else "" for i in range(23)]
-            st.session_state.away_squad = [a_raw[i] if i < len(a_raw) else "" for i in range(23)]
+            # FIXED: Pads up cleanly to ensure 23 values populate correctly
+            st.session_state.home_squad = [h_raw[i] if i < len(h_raw) else f"{home_team} Player {i+1}" for i in range(23)]
+            st.session_state.away_squad = [a_raw[i] if i < len(a_raw) else f"{away_team} Player {i+1}" for i in range(23)]
             st.session_state.current_home = home_team
             st.session_state.current_away = away_team
 
@@ -173,6 +172,3 @@ if st.session_state.search_clicked:
         if idx == 16:
             st.markdown("---")
             st.markdown("🔹 **RESERVES / FINISHERS**")
-
-
-            
