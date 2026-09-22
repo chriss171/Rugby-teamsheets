@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 import io
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -105,25 +104,29 @@ LEAGUE_TEAMS = {
 }
 
 # ==========================================
-# 2. CACHE INTERACTION & MANAGEMENT LAYER
+# 2. FIXED PERSISTENT STATE ENGINE
 # ==========================================
-if "app_state" not in st.session_state:
-    st.session_state.app_state = {
-        "active": False,
-        "home_team": "",
-        "away_team": "",
-        "home_roster_edit": [],
-        "away_roster_edit": []
-    }
+if "initialized" not in st.session_state:
+    st.session_state.initialized = True
+    st.session_state.app_active = False
+    st.session_state.saved_home = ""
+    st.session_state.saved_away = ""
+    st.session_state.saved_league = ""
+    st.session_state.saved_date = ""
+    # Create empty slots for player names
+    for i in range(1, 24):
+        st.session_state[f"edit_home_p_{i}"] = ""
+        st.session_state[f"edit_away_p_{i}"] = ""
 
-def trigger_app_clear():
-    st.session_state.app_state = {
-        "active": False,
-        "home_team": "",
-        "away_team": "",
-        "home_roster_edit": [],
-        "away_roster_edit": []
-    }
+def trigger_clear_all():
+    st.session_state.app_active = False
+    st.session_state.saved_home = ""
+    st.session_state.saved_away = ""
+    st.session_state.saved_league = ""
+    st.session_state.saved_date = ""
+    for i in range(1, 24):
+        st.session_state[f"edit_home_p_{i}"] = ""
+        st.session_state[f"edit_away_p_{i}"] = ""
 
 # ==========================================
 # 3. INTERACTIVE WEB UI PANEL
@@ -131,43 +134,43 @@ def trigger_app_clear():
 st.title("🏉 Rugby Team Sheet Generator")
 st.write("Select a league, lookup a fixture, customize rosters, and download printable outputs.")
 
-col_main, col_wipe = st.columns([4, 1.5])
-with col_wipe:
-    st.button("🧹 Clear All", on_click=trigger_app_clear, use_container_width=True)
+# Clear Button Row
+col_main_title, col_wipe_btn = st.columns([4, 1.5])
+with col_wipe_btn:
+    st.button("🧹 Clear All", on_click=trigger_clear_all, use_container_width=True)
 
-selected_league = st.selectbox("Select Competition League:", list(LEAGUE_TEAMS.keys()), key="league_select")
+# Select Inputs
+selected_league = st.selectbox("Select Competition League:", list(LEAGUE_TEAMS.keys()), key="ui_league")
 available_teams = LEAGUE_TEAMS[selected_league]
 
-home_team = st.selectbox("Select Home Team:", ["-- Choose Home Team --"] + available_teams, key="home_select")
-away_team = st.selectbox("Select Away Team:", ["-- Choose Away Team --"] + available_teams, key="away_select")
+ui_home = st.selectbox("Select Home Team:", ["-- Choose Home Team --"] + available_teams, key="ui_home_select")
+ui_away = st.selectbox("Select Away Team:", ["-- Choose Away Team --"] + available_teams, key="ui_away_select")
 
-match_date = st.date_input("Select Match Date:", key="date_select")
-date_str = match_date.strftime("%Y-%m-%d")
+ui_date = st.date_input("Select Match Date:", key="ui_date_select")
+ui_date_str = ui_date.strftime("%Y-%m-%d")
 
-# Process activation lock
-if home_team != "-- Choose Home Team --" and away_team != "-- Choose Away Team --":
-    if home_team == away_team:
+# Search and Populate Logic
+if ui_home != "-- Choose Home Team --" and ui_away != "-- Choose Away Team --":
+    if ui_home == ui_away:
         st.error("⚠️ Error: Home and Away teams cannot be identical clubs.")
-        st.session_state.app_state["active"] = False
+        st.session_state.app_active = False
     else:
         if st.button("🔍 Search & Populate Match Roster", type="secondary", use_container_width=True):
-            h_list = CLUB_ROSTERS.get(home_team, [])
-            a_list = CLUB_ROSTERS.get(away_team, [])
+            # Load permanent arrays
+            h_raw = CLUB_ROSTERS.get(ui_home, [])
+            a_raw = CLUB_ROSTERS.get(ui_away, [])
             
-            # Pad lists securely to exactly 23 names
-            st.session_state.app_state["home_roster_edit"] = [h_list[i] if i < len(h_list) else f"{home_team} Player {i+1}" for i in range(23)]
-            st.session_state.app_state["away_roster_edit"] = [a_list[i] if i < len(a_list) else f"{away_team} Player {i+1}" for i in range(23)]
-            st.session_state.app_state["home_team"] = home_team
-            st.session_state.app_state["away_team"] = away_team
-            st.session_state.app_state["active"] = True
+            # Map values explicitly into persistent state
+            for i in range(1, 24):
+                st.session_state[f"edit_home_p_{i}"] = h_raw[i-1] if (i-1) < len(h_raw) else f"{ui_home} Player {i}"
+                st.session_state[f"edit_away_p_{i}"] = a_raw[i-1] if (i-1) < len(a_raw) else f"{ui_away} Player {i}"
+                
+            st.session_state.saved_home = ui_home
+            st.session_state.saved_away = ui_away
+            st.session_state.saved_league = selected_league
+            st.session_state.saved_date = ui_date_str
+            st.session_state.app_active = True
 
 # ==========================================
-# 4. ROSTER INTERFACES & EXPORTERS
+# 4. LINEUP WORKSPACE & EXPORT UTILITIES
 # ==========================================
-if st.session_state.app_state["active"]:
-    # Validate selection consistency
-    if st.session_state.app_state["home_team"] != home_team or st.session_state.app_state["away_team"] != away_team:
-        st.warning("🔄 Selections adjusted. Tap 'Search & Populate' to rebuild memory tracks.")
-        
-    st.success(f"📋 Lineup Workspace Loaded: **{home_team} vs {away_team}**")
-    st.markdown("### 📝 Edit Lineups (1-23)")
