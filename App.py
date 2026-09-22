@@ -6,11 +6,11 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# Set mobile viewport layout
+# Set mobile viewport layout configuration
 st.set_page_config(page_title="Rugby Team Sheets", page_icon="🏉", layout="centered")
 
 # ==========================================
-# 1. 2026/2027 REAL SQUAD DATA STRUCTURE
+# 1. PERMANENT CLUB SQUAD REGISTRY
 # ==========================================
 CLUB_ROSTERS = {
     "Bath Rugby": [
@@ -83,7 +83,6 @@ CLUB_ROSTERS = {
         "Bryan Byrne", "Phil Brantingham", "Mark Tampin", "Tim Cardall", "Freddie Lockwood",
         "Cameron Nordli-Kelemeti", "Louie Johnson", "Iwan Stephens"
     ],
-    # Championship Club Core Rosters (Padded up dynamically to full matching lengths)
     "Ampthill": ["Morgan Strong", "Tobias Munday", "Josh Barton", "Killian Brennan", "Brandon Jackson", "Ben Harris"],
     "Bedford Blues": ["Alex Day", "Dean Adamson", "Will Maisey", "Joey Conway", "James Fish", "Michael Le Bourgeois"],
     "Blackheath": ["Tom Ffitch", "Leo Fielding", "Jack Daly", "Paul Schroter", "Andy Boye", "Ed Taylor"],
@@ -106,26 +105,35 @@ LEAGUE_TEAMS = {
 }
 
 # ==========================================
-# 2. STATE INTEGRITY & RESET LOGIC
+# 2. CACHE INTERACTION & MANAGEMENT LAYER
 # ==========================================
-if "search_clicked" not in st.session_state:
-    st.session_state.search_clicked = False
+if "app_state" not in st.session_state:
+    st.session_state.app_state = {
+        "active": False,
+        "home_team": "",
+        "away_team": "",
+        "home_roster_edit": [],
+        "away_roster_edit": []
+    }
 
-def reset_application():
-    st.session_state.search_clicked = False
-    for key in list(st.session_state.keys()):
-        if key != "search_clicked":
-            del st.session_state[key]
+def trigger_app_clear():
+    st.session_state.app_state = {
+        "active": False,
+        "home_team": "",
+        "away_team": "",
+        "home_roster_edit": [],
+        "away_roster_edit": []
+    }
 
 # ==========================================
-# 3. USER INTERFACE GENERATION
+# 3. INTERACTIVE WEB UI PANEL
 # ==========================================
 st.title("🏉 Rugby Team Sheet Generator")
 st.write("Select a league, lookup a fixture, customize rosters, and download printable outputs.")
 
-col_title, col_clear = st.columns([4, 1.5])
-with col_clear:
-    st.button("🧹 Clear All", on_click=reset_application, use_container_width=True)
+col_main, col_wipe = st.columns([4, 1.5])
+with col_wipe:
+    st.button("🧹 Clear All", on_click=trigger_app_clear, use_container_width=True)
 
 selected_league = st.selectbox("Select Competition League:", list(LEAGUE_TEAMS.keys()), key="league_select")
 available_teams = LEAGUE_TEAMS[selected_league]
@@ -136,39 +144,30 @@ away_team = st.selectbox("Select Away Team:", ["-- Choose Away Team --"] + avail
 match_date = st.date_input("Select Match Date:", key="date_select")
 date_str = match_date.strftime("%Y-%m-%d")
 
+# Process activation lock
 if home_team != "-- Choose Home Team --" and away_team != "-- Choose Away Team --":
     if home_team == away_team:
         st.error("⚠️ Error: Home and Away teams cannot be identical clubs.")
-        st.session_state.search_clicked = False
+        st.session_state.app_state["active"] = False
     else:
         if st.button("🔍 Search & Populate Match Roster", type="secondary", use_container_width=True):
-            st.session_state.search_clicked = True
+            h_list = CLUB_ROSTERS.get(home_team, [])
+            a_list = CLUB_ROSTERS.get(away_team, [])
             
-            # Fetch raw list array
-            h_raw = CLUB_ROSTERS.get(home_team, [])
-            a_raw = CLUB_ROSTERS.get(away_team, [])
-            
-            # FIXED: Pads up cleanly to ensure 23 values populate correctly
-            st.session_state.home_squad = [h_raw[i] if i < len(h_raw) else f"{home_team} Player {i+1}" for i in range(23)]
-            st.session_state.away_squad = [a_raw[i] if i < len(a_raw) else f"{away_team} Player {i+1}" for i in range(23)]
-            st.session_state.current_home = home_team
-            st.session_state.current_away = away_team
+            # Pad lists securely to exactly 23 names
+            st.session_state.app_state["home_roster_edit"] = [h_list[i] if i < len(h_list) else f"{home_team} Player {i+1}" for i in range(23)]
+            st.session_state.app_state["away_roster_edit"] = [a_list[i] if i < len(a_list) else f"{away_team} Player {i+1}" for i in range(23)]
+            st.session_state.app_state["home_team"] = home_team
+            st.session_state.app_state["away_team"] = away_team
+            st.session_state.app_state["active"] = True
 
-if st.session_state.search_clicked:
-    if st.session_state.get("current_home") != home_team or st.session_state.get("current_away") != away_team:
-        st.warning("🔄 Fixture selections changed. Click 'Search' to refresh rosters.")
-    
-    st.success(f"📋 Lineup Workspace Loaded: **{home_team} vs {away_team}**")
-    
-    home_players = []
-    away_players = []
-    
-    st.markdown("### 📝 Edit Lineups (1-23)")
-    st.caption("Customize individual jersey selections down below.")
-    
-    for idx in range(1, 24):
-        num_str = str(idx)
+# ==========================================
+# 4. ROSTER INTERFACES & EXPORTERS
+# ==========================================
+if st.session_state.app_state["active"]:
+    # Validate selection consistency
+    if st.session_state.app_state["home_team"] != home_team or st.session_state.app_state["away_team"] != away_team:
+        st.warning("🔄 Selections adjusted. Tap 'Search & Populate' to rebuild memory tracks.")
         
-        if idx == 16:
-            st.markdown("---")
-            st.markdown("🔹 **RESERVES / FINISHERS**")
+    st.success(f"📋 Lineup Workspace Loaded: **{home_team} vs {away_team}**")
+    st.markdown("### 📝 Edit Lineups (1-23)")
