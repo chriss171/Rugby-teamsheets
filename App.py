@@ -10,7 +10,7 @@ from reportlab.lib import colors
 st.set_page_config(page_title="Rugby Team Sheets", page_icon="🏉", layout="centered")
 
 # ==========================================
-# 1. 2026/2027 ACCURATE LEAGUE STRUCTURE
+# 1. 2026/2027 LEAGUE STRUCTURE
 # ==========================================
 LEAGUE_TEAMS = {
     "Gallagher Premiership": [
@@ -39,12 +39,11 @@ POSITIONS_MAP = {
 }
 
 # ==========================================
-# 2. STATE INTERACTION STATE MANAGEMENT
+# 2. STATE INTEGRITY & RESET LOGIC
 # ==========================================
 if "search_clicked" not in st.session_state:
     st.session_state.search_clicked = False
 
-# Reset Callback Logic
 def reset_application():
     st.session_state.search_clicked = False
     for key in list(st.session_state.keys()):
@@ -52,29 +51,27 @@ def reset_application():
             del st.session_state[key]
 
 # ==========================================
-# 3. MOBILE WEB UI GENERATION
+# 3. USER INTERFACE (TOUCH RESIZING)
 # ==========================================
 st.title("🏉 Rugby Team Sheet Generator")
-st.write("Select a league, lookup a game fixture, and manage matchday sheets.")
+st.write("Select a league, lookup a fixture, customize rosters, and download printable outputs.")
 
-# Global Action Row for Clears
+# Clear UI Actions Row
 col_title, col_clear = st.columns([4, 1.5])
 with col_clear:
-    st.button("🧹 Clear All", on_click=reset_application, use_container_width=True, help="Wipe all entries")
+    st.button("🧹 Clear All", on_click=reset_application, use_container_width=True)
 
-# Step 1: Select the competition tier
+# Select League & Teams
 selected_league = st.selectbox("Select Competition League:", list(LEAGUE_TEAMS.keys()), key="league_select")
 available_teams = LEAGUE_TEAMS[selected_league]
 
-# Step 2: Select Team Drop-downs
 home_team = st.selectbox("Select Home Team:", ["-- Choose Home Team --"] + available_teams, key="home_select")
 away_team = st.selectbox("Select Away Team:", ["-- Choose Away Team --"] + available_teams, key="away_select")
 
-# Step 3: Touch-friendly Date Input widget
 match_date = st.date_input("Select Match Date:", key="date_select")
 date_str = match_date.strftime("%Y-%m-%d")
 
-# Structural Search Activation Row
+# Search and Activation Logic
 if home_team != "-- Choose Home Team --" and away_team != "-- Choose Away Team --":
     if home_team == away_team:
         st.error("⚠️ Error: Home and Away teams cannot be identical clubs.")
@@ -85,26 +82,24 @@ if home_team != "-- Choose Home Team --" and away_team != "-- Choose Away Team -
             st.session_state.current_home = home_team
             st.session_state.current_away = away_team
 
-# Run interface updates only if match has been validated & searched
+# Display editor and download utilities once search completes successfully
 if st.session_state.search_clicked:
-    # Handle dropdown change adjustments cleanly
     if st.session_state.get("current_home") != home_team or st.session_state.get("current_away") != away_team:
-        st.warning("🔄 Fixture dropdown targets changed. Click 'Search' to refresh lineups.")
+        st.warning("🔄 Fixture selections changed. Click 'Search' to refresh rosters.")
     
-    st.success(f"📋 Populated: **{home_team} vs {away_team}**")
+    st.success(f"📋 Lineup Workspace Loaded: **{home_team} vs {away_team}**")
     
-    # Collect dynamic roster states
     home_players = []
     away_players = []
     
     st.markdown("### 📝 Edit Lineups (1-23)")
-    st.caption("Change any field below to update player names instantly.")
+    st.caption("Type directly inside any box to customize player selections.")
     
     for idx in range(1, 24):
         num_str = str(idx)
         pos_label = POSITIONS_MAP[num_str]
         
-        # Section break line for substitutes bench demarcation
+        # Injected visual divider for mobile layout clarity
         if idx == 16:
             st.markdown("---")
             st.markdown("🔹 **RESERVES / FINISHERS**")
@@ -112,13 +107,13 @@ if st.session_state.search_clicked:
             
         col1, col2 = st.columns(2)
         with col1:
-            h_val = st.text_input(f"{home_team} No. {num_str} ({pos_label})", value=f"{home_team} Player {num_str}", key=f"h_p_field_{idx}")
+            h_val = st.text_input(f"{home_team} No. {num_str} ({pos_label})", value=f"{home_team} Player {num_str}", key=f"h_field_{idx}")
             home_players.append(h_val)
         with col2:
-            a_val = st.text_input(f"{away_team} No. {num_str} ({pos_label})", value=f"{away_team} Player {num_str}", key=f"a_p_field_{idx}")
+            a_val = st.text_input(f"{away_team} No. {num_str} ({pos_label})", value=f"{away_team} Player {num_str}", key=f"a_field_{idx}")
             away_players.append(a_val)
 
-    st.markdown("### 📥 Export Options")
+    st.markdown("### 📥 Export Documents")
     action_col1, action_col2 = st.columns(2)
 
     # ==========================================
@@ -147,13 +142,18 @@ if st.session_state.search_clicked:
             Paragraph("#", th_style), Paragraph(f"{away_team}", th_style)
         ]]
         
+        # Track the precise index where the row subheader sits
+        separator_row_idx = None
+        
         for idx in range(1, 24):
             num_str = str(idx)
             pos = POSITIONS_MAP.get(num_str, "Player")
             p_home = home_players[idx-1]
             p_away = away_players[idx-1]
             
+            # If we hit index 16, append the subheader row first
             if idx == 16:
+                separator_row_idx = len(table_data)  # Track row index safely
                 table_data.append([
                     Paragraph("-", tb_style), Paragraph("<b>RESERVES / FINISHERS</b>", pos_style), 
                     Paragraph("", tb_style), Paragraph("-", tb_style), Paragraph("", tb_style)
@@ -166,6 +166,7 @@ if st.session_state.search_clicked:
         
         col_widths = [25, 110, 185, 25, 185]
         lineup_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        
         t_style = TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a365d')),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -175,9 +176,9 @@ if st.session_state.search_clicked:
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ])
         
+        # Apply zebra striping and separator formatting based on strict structural indexes
         for r in range(1, len(table_data)):
-            row_cells = table_data[r]
-            if len(row_cells) > 1 and hasattr(row_cells[1], 'text') and "RESERVES / FINISHERS" in row_cells[1].text:
+            if r == separator_row_idx:
                 t_style.add('BACKGROUND', (0, r), (-1, r), colors.HexColor('#edf2f7'))
                 t_style.add('SPAN', (1, r), (2, r))
                 t_style.add('SPAN', (3, r), (4, r))
@@ -191,7 +192,7 @@ if st.session_state.search_clicked:
         return buffer.getvalue()
 
     # ==========================================
-    # 5. EXPORT ENGINE: PLAIN TEXT ROSTER
+    # 5. EXPORT ENGINE: PLAIN TEXT SQUAD
     # ==========================================
     def generate_text_bytes():
         text_output = []
@@ -213,5 +214,5 @@ if st.session_state.search_clicked:
         for idx in range(1, 24):
             if idx == 16:
                 text_output.append("\n[RESERVES]")
-            text_output.append(f"{idx}. {POSITIONS_MAP[str(idx)]}: {away_players[idx-1]}")
+
             
